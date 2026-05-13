@@ -1,0 +1,23 @@
+# Trino + Iceberg profiles
+# Place in ~/.dbt/profiles.yml
+
+olist_lakehouse:
+  target: dev
+  outputs:
+    
+    # Development - Trino local
+    dev:
+      type: trino
+      method: ldap  # or ldap, kerberos
+      host: 172.19.0.15
+      port: 7070
+      user: user
+      password: passsword
+      database: retail_lake  # Iceberg catalog name
+      schema: olist_bronze
+      threads: 8
+      http_scheme: https
+      session_properties:
+        query_max_run_time: "5m"
+        join_distribution_type: "AUTOMATIC"
+      

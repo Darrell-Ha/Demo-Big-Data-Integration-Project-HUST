@@ -1,0 +1,72 @@
+# models/olist/schema.yml
+
+version: 2
+
+models:
+  - name: gld_sales_summary
+    description: "GMV, order count, avg order value theo ngày"
+    columns:
+      - name: order_date
+        tests: [not_null, unique]
+      - name: gross_merchandise_value
+        tests:
+          - not_null
+          - dbt_utils.accepted_range: {min_value: 0}
+      - name: total_orders
+        tests:
+          - not_null
+          - dbt_utils.accepted_range: {min_value: 0}
+
+  - name: gld_seller_performance
+    description: "Revenue, rating theo seller theo tháng"
+    columns:
+      - name: seller_id
+        tests: [not_null]
+      - name: year_month
+        tests: [not_null]
+      - name: total_revenue
+        tests:
+          - dbt_utils.accepted_range: {min_value: 0}
+      - name: avg_review_score
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 5
+              config: {severity: warn}
+
+  - name: gld_delivery_performance
+    description: "On-time rate, delay metrics theo state theo tháng"
+    columns:
+      - name: customer_state
+        tests: [not_null]
+      - name: year_month
+        tests: [not_null]
+      - name: on_time_rate_pct
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+
+  - name: gld_customer_ltv
+    description: "Lifetime value và tier phân loại theo customer"
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: lifetime_value
+        tests:
+          - dbt_utils.accepted_range: {min_value: 0}
+      - name: ltv_tier
+        tests:
+          - accepted_values:
+              values: ['low','mid','high']
+
+  - name: gld_category_revenue
+    description: "Doanh thu theo category theo tháng"
+    columns:
+      - name: product_category_name_english
+        tests: [not_null]
+      - name: year_month
+        tests: [not_null]
+      - name: category_total_revenue
+        tests:
+          - dbt_utils.accepted_range: {min_value: 0}

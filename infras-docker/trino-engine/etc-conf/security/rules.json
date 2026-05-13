@@ -1,0 +1,43 @@
+{
+  "catalogs": [
+    {
+      "group": "admin",
+      "allow": "all"
+    }
+  ],
+  "tables": [
+    {
+      "group": "admin",
+      "catalog": ".*",
+      "schema": ".*",
+      "table": ".*",
+      "privileges": [
+        "SELECT",
+        "INSERT",
+        "DELETE",
+        "UPDATE",
+        "OWNERSHIP",
+        "GRANT_SELECT"
+      ]
+    }
+  ],
+  "functions":[
+    {
+      "group": "admin",
+      "privileges": [
+        "EXECUTE",
+        "GRANT_EXECUTE",
+        "OWNERSHIP"
+      ]
+    }
+  ],
+  "procedures":[
+    {
+      "group": "admin",
+      "privileges": [
+        "EXECUTE",
+        "GRANT_EXECUTE"
+      ]
+    }
+  ]
+}

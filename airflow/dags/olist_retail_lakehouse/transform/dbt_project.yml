@@ -1,0 +1,69 @@
+# Name your project! Project names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: 'olist_lakehouse'
+version: '1.0.0'
+config-version: 2
+
+profile: 'olist_lakehouse'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  olist_lakehouse:
+    olist_audit:
+      +schema: olist_audit
+      +materialized: table
+      +tags: ["audit", "monitoring"]
+      +tblproperties:
+        format: "'PARQUET'"
+        format_version: '2'
+
+    olist_silver:
+      +schema: olist_silver
+      +materialized: incremental
+      +incremental_strategy: merge
+      +on_schema_change: append_new_columns   # Silver cho phép add column mới, không drop
+      +tags: ["olist_silver", "cleaned", "iceberg"]
+      +tblproperties:
+        format: "'PARQUET'"
+        format_version: '2'
+
+    olist_gold:
+      +schema: olist_gold
+      +materialized: incremental
+      +incremental_strategy: merge
+      +on_schema_change: append_new_columns
+      +tags: ["olist_gold", "analytics", "iceberg"]
+      +tblproperties:
+        format: "'PARQUET'"
+        format_version: '2'
+
+tests:
+  olist_lakehouse:
+    +store_failures: true
+    +schema: olist_audit
+
+vars:
+  pipeline_version: '1.0.0'
+  dq_completeness_threshold: 0.95   # 95% completeness required
+  dq_revenue_spike_multiplier: 3    # Alert nếu revenue > 3x avg 30 ngày
+  # S3 paths
+  audit_location: 's3a://retail-data-lakehouse/olist-audit'
+  bronze_location: 's3a://retail-data-lakehouse/olist-bronze'
+  silver_location: 's3a://retail-data-lakehouse/olist-silver'
+  gold_location: 's3a://retail-data-lakehouse/olist-gold'
+
+  # Incremental configuration
+  # run_date: '2025-01-01'
+  start_date: '2016-09-04'
+  end_date: '2016-09-05'

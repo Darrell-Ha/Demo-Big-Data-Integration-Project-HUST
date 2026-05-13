@@ -1,0 +1,257 @@
+version: "3.8"
+
+services:
+  hive-metastore-postgres:
+    image: postgres:17-alpine
+    container_name: retail-lake-hive-metastore-postgres
+    hostname: metastore-pg.retail-lake.domain
+    environment:
+      POSTGRES_DB: hive_metastore
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      # PGPORT: 9432
+    ports:
+      - "15432:5432"
+    # network_mode: host 
+    volumes:
+      - hive-metastore-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 1g
+    cpus: 2.0
+    networks:
+      retail-lake-network:
+        ipv4_address: 172.19.0.11
+
+  hive-metastore-svc:
+    image: apache/hive:3.1.3
+    container_name: retail-lake-hive-metastore-svc
+    hostname: metastore-svc.retail-lake.domain
+    depends_on:
+      - hive-metastore-postgres
+    environment:
+      SERVICE_NAME: metastore
+      HIVE_METASTORE_DB_TYPE: postgres
+      DB_DRIVER: postgres
+      IS_RESUME: true
+    # ports:
+    #   - "9083:9083"
+    # network_mode: host
+    volumes:
+      - './hive-metastore/start-metastore.sh:/opt/hive/start-metastore.sh'
+      - './hive-metastore/conf/hive-site.xml:/opt/hive/conf/hive-site.xml'
+      - './hive-metastore/auxlib:/opt/hive/auxlib'
+      - './hive-metastore/auxlib/postgresql-42.2.25.jar:/opt/hive/lib/postgresql-42.2.25.jar'
+    entrypoint: ['/opt/hive/start-metastore.sh']
+    mem_limit: 1g
+    cpus: 1.0
+    networks:
+      retail-lake-network:
+        ipv4_address: 172.19.0.10
+  
+  minio:
+    image: minio/minio:RELEASE.2025-03-12T18-04-18Z
+    container_name: retail-lake-minio
+    hostname: minio.retail-lake.domain
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    volumes:
+      - minio-data:/data
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    mem_limit: 2g
+    cpus: 1.0
+    networks:
+      retail-lake-network:
+        ipv4_address: 172.19.0.12
+  
+  trino-master:
+    image: trinodb/trino:476
+    container_name: retail-lake-trino-master
+    hostname: trino-master.retail-lake.domain
+    env_file:
+      - ./.env
+    depends_on:
+      - hive-metastore-svc
+      - minio
+    ports:
+      - "17070:7070"
+    volumes: 
+      - ./trino-engine/etc-conf/catalog:/etc/trino/catalog
+      - ./trino-engine/etc-conf/metastore:/etc/trino/metastore
+      - ./trino-engine/etc-conf/security:/etc/trino/security
+      - ./trino-engine/etc-conf/access-control.properties:/etc/trino/access-control.properties
+      - ./trino-engine/etc-conf/group-provider.properties:/etc/trino/group-provider.properties
+      - ./trino-engine/etc-conf/log.properties:/etc/trino/log.properties
+      - ./trino-engine/etc-conf/password-authenticator.properties:/etc/trino/password-authenticator.properties
+      - ./trino-engine/nodes-conf/master/data:/etc/trino/data
+      - ./trino-engine/nodes-conf/master/config.properties:/etc/trino/config.properties
+      - ./trino-engine/nodes-conf/master/node.properties:/etc/trino/node.properties
+      - ./trino-engine/nodes-conf/master/jvm.config:/etc/trino/jvm.config
+    environment:
+      - CATALOG_MANAGEMENT=dynamic
+    mem_limit: 1g
+    cpus: 1.0
+    networks:
+      retail-lake-network:
+        ipv4_address: 172.19.0.15
+  
+  trino-worker-01:
+    image: trinodb/trino:476
+    container_name: retail-lake-trino-worker-01
+    hostname: trino-worker-01.retail-lake.domain
+    env_file:
+      - ./.env
+    depends_on:
+      - hive-metastore-svc
+      - minio
+    # ports:
+    #   - "17070:7070"
+    volumes:
+      - ./trino-engine/etc-conf/catalog:/etc/trino/catalog
+      - ./trino-engine/etc-conf/metastore:/etc/trino/metastore
+      - ./trino-engine/etc-conf/security:/etc/trino/security
+      - ./trino-engine/etc-conf/access-control.properties:/etc/trino/access-control.properties
+      - ./trino-engine/etc-conf/group-provider.properties:/etc/trino/group-provider.properties
+      - ./trino-engine/etc-conf/log.properties:/etc/trino/log.properties
+      - ./trino-engine/etc-conf/password-authenticator.properties:/etc/trino/password-authenticator.properties
+      - ./trino-engine/nodes-conf/worker-01/data:/etc/trino/data
+      - ./trino-engine/nodes-conf/worker-01/config.properties:/etc/trino/config.properties
+      - ./trino-engine/nodes-conf/worker-01/node.properties:/etc/trino/node.properties
+      - ./trino-engine/nodes-conf/worker-01/jvm.config:/etc/trino/jvm.config
+    environment:
+      - CATALOG_MANAGEMENT=dynamic
+    mem_limit: 4g
+    cpus: 2.0
+    networks:
+      retail-lake-network:
+        ipv4_address: 172.19.0.16
+
+
+  spark-master:
+    image: my-spark:py3.11.14-v4.0.2 
+    container_name: retail-lake-spark-master
+    hostname: spark-master.retail-lake.domain
+    environment:
+      - SPARK_WORKLOAD=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: '2G'
+    networks:
+      retail-lake-network:
+        ipv4_address: 172.19.0.20
+  
+  spark-worker-01:
+    image: my-spark:py3.11.14-v4.0.2 
+    container_name: retail-lake-spark-worker-01
+    hostname: spark-worker-01.retail-lake.domain
+    environment:
+      - SPARK_WORKLOAD=worker
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_WORKER_PORT=7071
+      - SPARK_WORKER_WEBUI_PORT=8081
+    depends_on:
+      - spark-master
+    deploy:
+      resources:
+        limits:
+          cpus: '3'
+          memory: '3G'
+        reservations:
+          cpus: '2'
+          memory: 2G
+    networks:
+      retail-lake-network:
+        ipv4_address: 172.19.0.21
+  
+  spark-worker-02:
+    image: my-spark:py3.11.14-v4.0.2 
+    container_name: retail-lake-spark-worker-02
+    hostname: spark-worker-02.retail-lake.domain
+    environment:
+      - SPARK_WORKLOAD=worker
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_WORKER_PORT=7072
+      - SPARK_WORKER_WEBUI_PORT=8082
+    depends_on:
+      - spark-master
+    deploy:
+      resources:
+        limits:
+          cpus: '3'
+          memory: '3G'
+        reservations:
+          cpus: '2'
+          memory: 2G
+    networks:
+      retail-lake-network:
+        ipv4_address: 172.19.0.22
+  
+  # pg_metabase:
+  #   image: postgres:15
+  #   container_name: retail-lake-pg-metabase
+  #   hostname: pg-metabase.retail-lake.domain
+  #   environment:
+  #     POSTGRES_USER: metabase
+  #     POSTGRES_DB: metabaseappdb
+  #     POSTGRES_PASSWORD: mysecretpassword
+  #   volumes:
+  #     - ./postgres_metabase:/var/lib/postgresql/data
+  #   mem_limit: 2g
+  #   cpus: 2.0
+  #   networks:
+  #     retail-lake-network:
+  #       ipv4_address: 172.19.0.24
+  
+  # metabase:
+  #   image: metabase/metabase:latest
+  #   container_name: retail-lake-metabase
+  #   hostname: metabase.retail-lake.domain
+  #   ports:
+  #     - 3000:3000
+  #   environment:
+  #     MB_DB_TYPE: postgres
+  #     MB_DB_DBNAME: metabaseappdb
+  #     MB_DB_PORT: 5432
+  #     MB_DB_USER: metabase
+  #     MB_DB_PASS: mysecretpassword
+  #     MB_DB_HOST: pg-metabase.retail-lake.domain
+  #   depends_on:
+  #     - pg_metabase
+  #   healthcheck:
+  #     test: curl --fail -I http://localhost:3000/api/health || exit 1
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 5
+  #   mem_limit: 2g
+  #   cpus: 2.0
+  #   networks:
+  #     retail-lake-network:
+  #       ipv4_address: 172.19.0.25
+  
+volumes:
+  hive-metastore-data:
+    name: olist-hive-metastore-data
+  minio-data:
+    name: olist-minio-data
+
+networks:
+  retail-lake-network:
+    name: retail-lake.domain
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.0.0/16
